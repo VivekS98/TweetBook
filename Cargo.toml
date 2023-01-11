@@ -1,0 +1,15 @@
+[package]
+name = "tweetbook"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "4"
+bcrypt = "0.13.0"
+dotenv = "0.15.0"
+futures = "0.3.25"
+jsonwebtoken = "8.2.0"
+mongodb = "2.3.1"
+serde = "1.0.152"
