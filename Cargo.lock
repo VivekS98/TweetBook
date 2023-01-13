@@ -1874,6 +1874,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "bcrypt",
+ "derive_more",
  "dotenv",
  "futures",
  "jsonwebtoken",

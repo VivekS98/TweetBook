@@ -1,5 +1,6 @@
 mod api;
 mod models;
+mod utils;
 
 use actix_web::{web, App, HttpServer};
 use api::{auth::auth, messages::messages, user::user};

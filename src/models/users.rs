@@ -2,9 +2,12 @@ use actix_web::web;
 use futures::StreamExt;
 use mongodb::{
     bson::{doc, from_document, oid::ObjectId},
+    error::Error,
     Collection,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::api::auth::Auth;
 
 use super::{init::Tweetbook, messages::Message};
 
@@ -35,12 +38,15 @@ pub struct MinUser {
 }
 
 impl User {
-    pub fn get_collection(data: web::Data<Tweetbook>) -> Collection<Self> {
-        data.db.collection::<Self>("users")
+    pub fn get_collection<T>(data: web::Data<Tweetbook>) -> Collection<T> {
+        data.db.collection::<T>("users")
     }
 
-    pub async fn get_users(data: web::Data<Tweetbook>, id: &str) -> Vec<Self> {
-        let mut users = Self::get_collection(data)
+    pub async fn get_user_details(
+        data: web::Data<Tweetbook>,
+        id: &str,
+    ) -> Result<Vec<Self>, Error> {
+        let users_response = Self::get_collection::<Self>(data)
             .aggregate(
                 vec![
                     doc! {
@@ -107,15 +113,26 @@ impl User {
                 ],
                 None,
             )
-            .await
-            .unwrap();
+            .await;
 
-        let mut result: Vec<Self> = vec![];
+        match users_response {
+            Ok(mut users) => {
+                let mut result: Vec<Self> = vec![];
 
-        while let Some(res) = users.next().await {
-            let msg: Self = from_document(res.unwrap()).unwrap();
-            result.push(msg);
+                while let Some(res) = users.next().await {
+                    let msg: Self = from_document(res.unwrap()).unwrap();
+                    result.push(msg);
+                }
+                Ok(result)
+            }
+            Err(error) => Err(error),
         }
-        result
+    }
+
+    pub async fn get_user(data: web::Data<Tweetbook>, body: web::Json<Auth>) -> Option<User> {
+        Self::get_collection(data)
+            .find_one(doc! {}, None)
+            .await
+            .expect("User Not found!")
     }
 }
