@@ -1,4 +1,4 @@
-use actix_web::{post, web, Either, HttpResponse, Responder};
+use actix_web::{post, web, Either, HttpResponse};
 use bcrypt::verify;
 use dotenv::dotenv;
 use jsonwebtoken::{encode, EncodingKey, Header};
@@ -14,8 +14,9 @@ use crate::{
     utils::error::UserError,
 };
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct AuthCredentials {
+    pub username: Option<String>,
     pub email: String,
     pub password: String,
 }
@@ -34,8 +35,33 @@ pub fn auth(cfg: &mut web::ServiceConfig) {
 }
 
 #[post("/api/auth/signup")]
-async fn signup(db: web::Data<Tweetbook>, body: web::Json<AuthCredentials>) -> impl Responder {
-    HttpResponse::Ok().body("Signup!")
+async fn signup(
+    db: web::Data<Tweetbook>,
+    body: web::Json<AuthCredentials>,
+) -> Either<HttpResponse, Result<&'static str, UserError>> {
+    let inserted = User::add_user(db, body.into_inner()).await;
+
+    match inserted {
+        Ok(new_user) => {
+            let secret = env::var("TOKEN_SECRET").unwrap();
+            let claims = new_user;
+
+            let token = encode(
+                &Header::default(),
+                &claims,
+                &EncodingKey::from_secret(secret.as_ref()),
+            )
+            .unwrap();
+
+            Either::Left(HttpResponse::Ok().json(AuthResponse {
+                id: claims.id,
+                username: claims.username,
+                profile_img_url: claims.profile_img_url.unwrap_or_default(),
+                token,
+            }))
+        }
+        Err(_) => Either::Right(Err(UserError::InternalServerError)),
+    }
 }
 
 #[post("/api/auth/signin")]
@@ -47,7 +73,7 @@ async fn signin(
 
     match user_data {
         Ok(mut users) => {
-            let user = Box::new(users.remove(0));
+            let user = users.remove(0);
             let matched = verify(json.password.as_str(), user.password.unwrap().as_str());
 
             match matched {
@@ -59,8 +85,7 @@ async fn signin(
                             id: user.id,
                             username: user.username,
                             email: user.email,
-                            bio: user.bio,
-                            profile_img_url: user.profile_img_url,
+                            profile_img_url: Some(user.profile_img_url.unwrap_or_default()),
                         };
 
                         let token = encode(
@@ -73,7 +98,7 @@ async fn signin(
                         Either::Left(HttpResponse::Ok().json(AuthResponse {
                             id: claims.id,
                             username: claims.username,
-                            profile_img_url: claims.profile_img_url,
+                            profile_img_url: claims.profile_img_url.unwrap_or_default(),
                             token,
                         }))
                     } else {

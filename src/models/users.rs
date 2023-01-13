@@ -1,4 +1,5 @@
 use actix_web::web;
+use bcrypt::hash;
 use futures::StreamExt;
 use mongodb::{
     bson::{doc, from_document, oid::ObjectId, Document},
@@ -6,6 +7,8 @@ use mongodb::{
     Collection, Cursor,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::api::auth::AuthCredentials;
 
 use super::{init::Tweetbook, messages::Message};
 
@@ -21,7 +24,7 @@ pub struct User {
     pub following: Option<Vec<MinUser>>,
     pub bio: Option<String>,
     #[serde(rename = "profileImgUrl")]
-    pub profile_img_url: String,
+    pub profile_img_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,9 +33,8 @@ pub struct MinUser {
     pub id: ObjectId,
     pub email: String,
     pub username: String,
-    pub bio: Option<String>,
     #[serde(rename = "profileImgUrl")]
-    pub profile_img_url: String,
+    pub profile_img_url: Option<String>,
 }
 
 impl User {
@@ -165,5 +167,33 @@ impl User {
             .await;
 
         Self::parse_aggrigate::<Self>(users).await
+    }
+
+    pub async fn add_user(
+        data: web::Data<Tweetbook>,
+        creds: AuthCredentials,
+    ) -> Result<MinUser, Error> {
+        let cloned_creds = creds.clone();
+
+        let user = Self::get_collection::<Document>(data)
+            .insert_one(
+                doc! {
+                    "username": creds.username.unwrap(),
+                    "email": creds.email,
+                    "password": hash(creds.password, 10).unwrap()
+                },
+                None,
+            )
+            .await;
+
+        match user {
+            Ok(inserted) => Ok(MinUser {
+                id: inserted.inserted_id.as_object_id().unwrap(),
+                email: cloned_creds.email,
+                username: cloned_creds.password,
+                profile_img_url: Some("".to_string()),
+            }),
+            Err(error) => Err(error),
+        }
     }
 }
