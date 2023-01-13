@@ -18,13 +18,7 @@ async fn user_tweets(
     let users_response = User::get_user_details(db, &id).await;
 
     match users_response {
-        Ok(users) => {
-            if users.len() > 0 {
-                Either::Left(HttpResponse::Ok().json(users))
-            } else {
-                Either::Right(Err(UserError::UserNotExists))
-            }
-        }
-        Err(_) => Either::Right(Err(UserError::InternalServerError)),
+        Ok(users) => Either::Left(HttpResponse::Ok().json(users)),
+        Err(_) => Either::Right(Err(UserError::UserNotExists)),
     }
 }

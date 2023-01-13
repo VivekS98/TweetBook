@@ -1,8 +1,9 @@
 use actix_web::web;
 use futures::StreamExt;
 use mongodb::{
-    bson::{doc, from_document, oid::ObjectId, DateTime},
-    Collection,
+    bson::{doc, from_document, oid::ObjectId, DateTime, Document},
+    error::Error,
+    Collection, Cursor,
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +27,26 @@ impl Message {
         data.db.collection::<Self>("messages")
     }
 
-    pub async fn get_all_messages(data: web::Data<Tweetbook>) -> Vec<Self> {
-        let mut messages = Self::get_collection(data)
+    async fn parse_aggrigate<T>(cursor: Result<Cursor<Document>, Error>) -> Result<Vec<T>, Error>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        match cursor {
+            Ok(mut message) => {
+                let mut result: Vec<T> = vec![];
+
+                while let Some(res) = message.next().await {
+                    let msg: T = from_document(res.unwrap()).unwrap();
+                    result.push(msg);
+                }
+                Ok(result)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn get_all_messages(data: web::Data<Tweetbook>) -> Result<Vec<Self>, Error> {
+        let messages = Self::get_collection(data)
             .aggregate(
                 vec![
                     doc! {
@@ -62,15 +81,8 @@ impl Message {
                 ],
                 None,
             )
-            .await
-            .unwrap();
+            .await;
 
-        let mut result: Vec<Self> = vec![];
-
-        while let Some(res) = messages.next().await {
-            let msg: Self = from_document(res.unwrap()).unwrap();
-            result.push(msg);
-        }
-        result
+        Self::parse_aggrigate::<Self>(messages).await
     }
 }

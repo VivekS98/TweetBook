@@ -1,10 +1,9 @@
-use std::env;
-extern crate dotenv;
 use dotenv::dotenv;
 use mongodb::{
     options::{ClientOptions, ResolverConfig},
     Client, Database,
 };
+use std::env;
 
 pub struct Tweetbook {
     pub db: Database,

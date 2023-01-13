@@ -1,13 +1,11 @@
 use actix_web::web;
 use futures::StreamExt;
 use mongodb::{
-    bson::{doc, from_document, oid::ObjectId},
+    bson::{doc, from_document, oid::ObjectId, Document},
     error::Error,
-    Collection,
+    Collection, Cursor,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::api::auth::Auth;
 
 use super::{init::Tweetbook, messages::Message};
 
@@ -29,7 +27,7 @@ pub struct User {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MinUser {
     #[serde(rename = "_id")]
-    pub id: Option<ObjectId>,
+    pub id: ObjectId,
     pub email: String,
     pub username: String,
     pub bio: Option<String>,
@@ -42,11 +40,29 @@ impl User {
         data.db.collection::<T>("users")
     }
 
+    async fn parse_aggrigate<T>(cursor: Result<Cursor<Document>, Error>) -> Result<Vec<T>, Error>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        match cursor {
+            Ok(mut users) => {
+                let mut result: Vec<T> = vec![];
+
+                while let Some(res) = users.next().await {
+                    let usr: T = from_document(res.unwrap()).unwrap();
+                    result.push(usr);
+                }
+                Ok(result)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     pub async fn get_user_details(
         data: web::Data<Tweetbook>,
         id: &str,
     ) -> Result<Vec<Self>, Error> {
-        let users_response = Self::get_collection::<Self>(data)
+        let users = Self::get_collection::<Self>(data)
             .aggregate(
                 vec![
                     doc! {
@@ -84,6 +100,14 @@ impl User {
                                         "foreignField": "_id",
                                         "as": "likes",
                                     }
+                                },
+                                {
+                                    "$project": {
+                                        "followers": 0,
+                                        "following": 0,
+                                        "messages": 0,
+                                        "password": 0
+                                    }
                                 }
                             ],
                             "as": "messages",
@@ -115,24 +139,31 @@ impl User {
             )
             .await;
 
-        match users_response {
-            Ok(mut users) => {
-                let mut result: Vec<Self> = vec![];
-
-                while let Some(res) = users.next().await {
-                    let msg: Self = from_document(res.unwrap()).unwrap();
-                    result.push(msg);
-                }
-                Ok(result)
-            }
-            Err(error) => Err(error),
-        }
+        Self::parse_aggrigate::<Self>(users).await
     }
 
-    pub async fn get_user(data: web::Data<Tweetbook>, body: web::Json<Auth>) -> Option<User> {
-        Self::get_collection(data)
-            .find_one(doc! {}, None)
-            .await
-            .expect("User Not found!")
+    pub async fn get_user_by_email(
+        data: web::Data<Tweetbook>,
+        email: &str,
+    ) -> Result<Vec<Self>, Error> {
+        let users = Self::get_collection::<Self>(data)
+            .aggregate(
+                vec![
+                    doc! {
+                        "$match": { "email": email }
+                    },
+                    doc! {
+                        "$project": {
+                            "followers": 0,
+                            "following": 0,
+                            "messages": 0
+                        }
+                    },
+                ],
+                None,
+            )
+            .await;
+
+        Self::parse_aggrigate::<Self>(users).await
     }
 }
