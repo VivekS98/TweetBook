@@ -5,6 +5,7 @@ use mongodb::{
 };
 use std::env;
 
+#[derive(Clone)]
 pub struct Tweetbook {
     pub db: Database,
 }

@@ -196,4 +196,29 @@ impl User {
             Err(error) => Err(error),
         }
     }
+
+    pub async fn update_user(
+        data: web::Data<Tweetbook>,
+        user_id: String,
+        message_id: ObjectId,
+    ) -> Result<MinUser, Error> {
+        let user_updated = Self::get_collection::<MinUser>(data.clone())
+            .find_one_and_update(
+                doc! {"$expr": {
+                    "$eq": ["$_id", {"$toObjectId": user_id}]
+                }},
+                doc! { "$push": { "messages": message_id }},
+                None,
+            )
+            .await;
+        println!("user_updated {:?}", user_updated);
+
+        match user_updated {
+            Ok(user) => Ok(user.unwrap()),
+            Err(error) => {
+                println!("User_error {}", error);
+                Err(error)
+            }
+        }
+    }
 }
