@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::{env, net::IpAddr};
 
 use crate::{
-    models::{init::Tweetbook, users::User},
+    models::{
+        init::Tweetbook,
+        users::{MinUser, User},
+    },
     utils::error::UserError,
 };
 
@@ -17,13 +20,6 @@ pub struct AuthCredentials {
     pub email: String,
     pub password: String,
     pub ip: Option<IpAddr>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct AuthTokenClaims {
-    pub id: ObjectId,
-    pub username: String,
-    pub ip: IpAddr,
 }
 
 #[derive(Serialize)]
@@ -66,11 +62,7 @@ async fn signup(
                 match inserted {
                     Ok(new_user) => {
                         let secret = env::var("TOKEN_SECRET").unwrap();
-                        let claims = AuthTokenClaims {
-                            id: new_user.id,
-                            username: new_user.username,
-                            ip: req.peer_addr().unwrap().ip(),
-                        };
+                        let claims = new_user;
 
                         let token = encode(
                             &Header::default(),
@@ -82,7 +74,7 @@ async fn signup(
                         Either::Left(HttpResponse::Ok().json(AuthResponse {
                             id: claims.id,
                             username: claims.username,
-                            profile_img_url: new_user.profile_img_url.unwrap_or_default(),
+                            profile_img_url: claims.profile_img_url.unwrap_or_default(),
                             token,
                         }))
                     }
@@ -129,11 +121,13 @@ async fn signin(
                                 .unwrap();
                             }
 
-                            let claims = AuthTokenClaims {
+                            let claims = MinUser {
                                 id: user.id,
                                 username: user.username,
-                                ip: req.peer_addr().unwrap().ip(),
+                                email: user.email,
+                                profile_img_url: Some(user.profile_img_url.unwrap_or_default()),
                             };
+
                             let token = encode(
                                 &Header::default(),
                                 &claims,
@@ -144,7 +138,7 @@ async fn signin(
                             Either::Left(HttpResponse::Ok().json(AuthResponse {
                                 id: claims.id,
                                 username: claims.username,
-                                profile_img_url: user.profile_img_url.unwrap_or_default(),
+                                profile_img_url: claims.profile_img_url.unwrap_or_default(),
                                 token,
                             }))
                         } else {
