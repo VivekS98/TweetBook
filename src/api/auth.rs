@@ -1,16 +1,13 @@
-use actix_web::{post, web, Either, HttpResponse};
+use actix_web::{post, web, Either, HttpRequest, HttpResponse};
 use bcrypt::verify;
 use dotenv::dotenv;
 use jsonwebtoken::{encode, EncodingKey, Header};
-use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{doc, oid::ObjectId};
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{env, net::IpAddr};
 
 use crate::{
-    models::{
-        init::Tweetbook,
-        users::{MinUser, User},
-    },
+    models::{init::Tweetbook, users::User},
     utils::error::UserError,
 };
 
@@ -19,6 +16,14 @@ pub struct AuthCredentials {
     pub username: Option<String>,
     pub email: String,
     pub password: String,
+    pub ip: Option<IpAddr>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct AuthTokenClaims {
+    pub id: ObjectId,
+    pub username: String,
+    pub ip: IpAddr,
 }
 
 #[derive(Serialize)]
@@ -36,56 +41,35 @@ pub fn auth(cfg: &mut web::ServiceConfig) {
 
 #[post("/api/auth/signup")]
 async fn signup(
+    req: HttpRequest,
     db: web::Data<Tweetbook>,
     body: web::Json<AuthCredentials>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
-    let inserted = User::add_user(db, body.into_inner()).await;
-
-    match inserted {
-        Ok(new_user) => {
-            let secret = env::var("TOKEN_SECRET").unwrap();
-            let claims = new_user;
-
-            let token = encode(
-                &Header::default(),
-                &claims,
-                &EncodingKey::from_secret(secret.as_ref()),
-            )
-            .unwrap();
-
-            Either::Left(HttpResponse::Ok().json(AuthResponse {
-                id: claims.id,
-                username: claims.username,
-                profile_img_url: claims.profile_img_url.unwrap_or_default(),
-                token,
-            }))
-        }
-        Err(_) => Either::Right(Err(UserError::InternalServerError)),
-    }
-}
-
-#[post("/api/auth/signin")]
-async fn signin(
-    db: web::Data<Tweetbook>,
-    json: web::Json<AuthCredentials>,
-) -> Either<HttpResponse, Result<&'static str, UserError>> {
-    let user_data = User::get_user_by_email(db, json.email.as_str()).await;
+    let user_data = User::get_user_by_email(db.clone(), &body.email).await;
 
     match user_data {
-        Ok(mut users) => {
-            let user = users.remove(0);
-            let matched = verify(json.password.as_str(), user.password.unwrap().as_str());
+        Ok(old_users) => {
+            if old_users.len() > 0 {
+                Either::Right(Err(UserError::UserAlreadyExists))
+            } else {
+                let inserted = User::add_user(
+                    db,
+                    AuthCredentials {
+                        username: body.username.clone(),
+                        email: body.email.clone(),
+                        password: body.password.clone(),
+                        ip: Some(req.peer_addr().unwrap().ip()),
+                    },
+                )
+                .await;
 
-            match matched {
-                Ok(password_match) => {
-                    if password_match == true {
-                        dotenv().ok();
+                match inserted {
+                    Ok(new_user) => {
                         let secret = env::var("TOKEN_SECRET").unwrap();
-                        let claims = MinUser {
-                            id: user.id,
-                            username: user.username,
-                            email: user.email,
-                            profile_img_url: Some(user.profile_img_url.unwrap_or_default()),
+                        let claims = AuthTokenClaims {
+                            id: new_user.id,
+                            username: new_user.username,
+                            ip: req.peer_addr().unwrap().ip(),
                         };
 
                         let token = encode(
@@ -98,14 +82,79 @@ async fn signin(
                         Either::Left(HttpResponse::Ok().json(AuthResponse {
                             id: claims.id,
                             username: claims.username,
-                            profile_img_url: claims.profile_img_url.unwrap_or_default(),
+                            profile_img_url: new_user.profile_img_url.unwrap_or_default(),
                             token,
                         }))
-                    } else {
-                        Either::Right(Err(UserError::WrongEmailOrPassword))
                     }
+                    Err(_) => Either::Right(Err(UserError::InternalServerError)),
                 }
-                Err(_) => Either::Right(Err(UserError::WrongEmailOrPassword)),
+            }
+        }
+        Err(_) => Either::Right(Err(UserError::InternalServerError)),
+    }
+}
+
+#[post("/api/auth/signin")]
+async fn signin(
+    req: HttpRequest,
+    db: web::Data<Tweetbook>,
+    json: web::Json<AuthCredentials>,
+) -> Either<HttpResponse, Result<&'static str, UserError>> {
+    let user_data = User::get_user_by_email(db.clone(), json.email.as_str()).await;
+
+    match user_data {
+        Ok(mut old_users) => {
+            if old_users.len() > 0 {
+                let user = old_users.remove(0);
+                let matched = verify(json.password.as_str(), user.password.unwrap().as_str());
+
+                match matched {
+                    Ok(password_match) => {
+                        if password_match == true {
+                            dotenv().ok();
+                            let secret = env::var("TOKEN_SECRET").unwrap();
+
+                            let ip_exists = user
+                                .active_ips
+                                .iter()
+                                .any(|ip| ip.contains(&req.peer_addr().unwrap().ip()));
+
+                            if !ip_exists {
+                                User::update_user(
+                                    db,
+                                    user.id.to_string(),
+                                    doc! { "$push": { "activeIps": req.peer_addr().unwrap().ip().to_string() }},
+                                )
+                                .await
+                                .unwrap();
+                            }
+
+                            let claims = AuthTokenClaims {
+                                id: user.id,
+                                username: user.username,
+                                ip: req.peer_addr().unwrap().ip(),
+                            };
+                            let token = encode(
+                                &Header::default(),
+                                &claims,
+                                &EncodingKey::from_secret(secret.as_ref()),
+                            )
+                            .unwrap();
+
+                            Either::Left(HttpResponse::Ok().json(AuthResponse {
+                                id: claims.id,
+                                username: claims.username,
+                                profile_img_url: user.profile_img_url.unwrap_or_default(),
+                                token,
+                            }))
+                        } else {
+                            Either::Right(Err(UserError::WrongEmailOrPassword))
+                        }
+                    }
+                    Err(_) => Either::Right(Err(UserError::WrongEmailOrPassword)),
+                }
+            } else {
+                Either::Right(Err(UserError::WrongEmailOrPassword))
             }
         }
         Err(_) => Either::Right(Err(UserError::WrongEmailOrPassword)),

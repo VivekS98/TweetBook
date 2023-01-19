@@ -107,7 +107,9 @@ impl Message {
             Ok(inserted) => {
                 let message_id = inserted.inserted_id.as_object_id().unwrap();
 
-                let user_resp = User::update_user(data, user_id, message_id).await;
+                let user_resp =
+                    User::update_user(data, user_id, doc! { "$push": { "messages": message_id }})
+                        .await;
 
                 match user_resp {
                     Ok(user) => Ok(Self {

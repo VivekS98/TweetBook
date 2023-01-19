@@ -9,8 +9,10 @@ use derive_more::{Display, Error};
 pub enum UserError {
     #[display(fmt = "Unauthorised access. Please login or signup.")]
     Unauthorised,
-    #[display(fmt = "User doesn't exist")]
+    #[display(fmt = "User doesn't exist!")]
     UserNotExists,
+    #[display(fmt = "User already exists!")]
+    UserAlreadyExists,
     #[display(fmt = "Something went wrong! Please try again later")]
     InternalServerError,
     #[display(fmt = "Wrong Email or Password. PLease Try with the valid credentials")]
@@ -27,9 +29,10 @@ impl error::ResponseError for UserError {
     fn status_code(&self) -> StatusCode {
         match *self {
             UserError::UserNotExists => StatusCode::BAD_REQUEST,
+            UserError::UserAlreadyExists => StatusCode::NOT_ACCEPTABLE,
             UserError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             UserError::WrongEmailOrPassword => StatusCode::BAD_REQUEST,
-            UserError::Unauthorised => StatusCode::FORBIDDEN,
+            UserError::Unauthorised => StatusCode::UNAUTHORIZED,
         }
     }
 }

@@ -1,9 +1,12 @@
+use std::net::IpAddr;
+
 use actix_web::web;
 use bcrypt::hash;
 use futures::StreamExt;
 use mongodb::{
     bson::{doc, from_document, oid::ObjectId, Document},
     error::Error,
+    options::UpdateModifications,
     Collection, Cursor,
 };
 use serde::{Deserialize, Serialize};
@@ -25,6 +28,8 @@ pub struct User {
     pub bio: Option<String>,
     #[serde(rename = "profileImgUrl")]
     pub profile_img_url: Option<String>,
+    #[serde(rename = "activeIps")]
+    pub active_ips: Option<Vec<IpAddr>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -108,7 +113,8 @@ impl User {
                                         "followers": 0,
                                         "following": 0,
                                         "messages": 0,
-                                        "password": 0
+                                        "password": 0,
+                                        "activeIps": 0
                                     }
                                 }
                             ],
@@ -134,6 +140,7 @@ impl User {
                     doc! {
                         "$project": {
                             "password": 0,
+                            "activeIps": 0
                         }
                     },
                 ],
@@ -180,7 +187,8 @@ impl User {
                 doc! {
                     "username": creds.username.unwrap(),
                     "email": creds.email,
-                    "password": hash(creds.password, 10).unwrap()
+                    "password": hash(creds.password, 10).unwrap(),
+                    "activeIps": vec![creds.ip.unwrap().to_string()]
                 },
                 None,
             )
@@ -200,14 +208,14 @@ impl User {
     pub async fn update_user(
         data: web::Data<Tweetbook>,
         user_id: String,
-        message_id: ObjectId,
+        update: impl Into<UpdateModifications>,
     ) -> Result<MinUser, Error> {
         let user_updated = Self::get_collection::<MinUser>(data.clone())
             .find_one_and_update(
                 doc! {"$expr": {
                     "$eq": ["$_id", {"$toObjectId": user_id}]
                 }},
-                doc! { "$push": { "messages": message_id }},
+                update,
                 None,
             )
             .await;
