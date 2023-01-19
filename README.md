@@ -6,7 +6,7 @@ API routes
 
 /api/auth/signup -> POST (signup user) DONE
 
-/api/users/:id/ -> GET (get user's tweets), PUT (update user profile) DONE
+/api/user/profile -> GET (get user's profile), PUT (update user profile) DONE
 
 /api/users/:id/message/:messageId/like -> POST (like a tweet), DELETE (unlike a tweet)
 
@@ -16,6 +16,6 @@ API routes
 
 /api/users/:id/:message_id -> GET (get a tweet), DELETE (delete a tweet)
 
-/api/users/:id/messages -> POST (post a tweet) DONE
+/api/users/tweet -> POST (post a tweet) DONE
 
-/api/messages -> GET (get all tweets) DONE
+/api/tweets -> GET (get all tweets) DONE

@@ -90,14 +90,16 @@ impl Message {
 
     pub async fn insert_message(
         data: web::Data<Tweetbook>,
-        text: &str,
+        text: String,
         user_id: String,
     ) -> Result<Message, Error> {
         let message = Self::get_collection::<Document>(data.clone())
             .insert_one(
                 doc! {
                     "user": user_id.clone(),
-                    "text": text
+                    "text": text.clone(),
+                    "createdAt": DateTime::now(),
+                    "updatedAt": DateTime::now()
                 },
                 None,
             )
@@ -114,7 +116,7 @@ impl Message {
                 match user_resp {
                     Ok(user) => Ok(Self {
                         id: message_id,
-                        text: text.to_string(),
+                        text: text,
                         user: Some(user),
                         created_at: DateTime::now(),
                         updated_at: DateTime::now(),

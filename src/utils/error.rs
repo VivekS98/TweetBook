@@ -7,7 +7,7 @@ use derive_more::{Display, Error};
 
 #[derive(Debug, Display, Error)]
 pub enum UserError {
-    #[display(fmt = "Unauthorised access. Please login or signup.")]
+    #[display(fmt = "Unauthorised access. Please signup or login.")]
     Unauthorised,
     #[display(fmt = "User doesn't exist!")]
     UserNotExists,

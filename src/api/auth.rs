@@ -1,17 +1,15 @@
 use actix_web::{post, web, Either, HttpRequest, HttpResponse};
 use bcrypt::verify;
-use dotenv::dotenv;
-use jsonwebtoken::{encode, EncodingKey, Header};
 use mongodb::bson::{doc, oid::ObjectId};
 use serde::{Deserialize, Serialize};
-use std::{env, net::IpAddr};
+use std::net::IpAddr;
 
 use crate::{
     models::{
         init::Tweetbook,
         users::{MinUser, User},
     },
-    utils::error::UserError,
+    utils::{auth::Authorization, error::UserError},
 };
 
 #[derive(Clone, Deserialize)]
@@ -61,20 +59,12 @@ async fn signup(
 
                 match inserted {
                     Ok(new_user) => {
-                        let secret = env::var("TOKEN_SECRET").unwrap();
-                        let claims = new_user;
-
-                        let token = encode(
-                            &Header::default(),
-                            &claims,
-                            &EncodingKey::from_secret(secret.as_ref()),
-                        )
-                        .unwrap();
+                        let token = Authorization::get_token(new_user.clone());
 
                         Either::Left(HttpResponse::Ok().json(AuthResponse {
-                            id: claims.id,
-                            username: claims.username,
-                            profile_img_url: claims.profile_img_url.unwrap_or_default(),
+                            id: new_user.id,
+                            username: new_user.username,
+                            profile_img_url: new_user.profile_img_url.unwrap_or_default(),
                             token,
                         }))
                     }
@@ -103,9 +93,6 @@ async fn signin(
                 match matched {
                     Ok(password_match) => {
                         if password_match == true {
-                            dotenv().ok();
-                            let secret = env::var("TOKEN_SECRET").unwrap();
-
                             let ip_exists = user
                                 .active_ips
                                 .iter()
@@ -125,15 +112,10 @@ async fn signin(
                                 id: user.id,
                                 username: user.username,
                                 email: user.email,
-                                profile_img_url: Some(user.profile_img_url.unwrap_or_default()),
+                                profile_img_url: user.profile_img_url,
                             };
 
-                            let token = encode(
-                                &Header::default(),
-                                &claims,
-                                &EncodingKey::from_secret(secret.as_ref()),
-                            )
-                            .unwrap();
+                            let token = Authorization::get_token(claims.clone());
 
                             Either::Left(HttpResponse::Ok().json(AuthResponse {
                                 id: claims.id,

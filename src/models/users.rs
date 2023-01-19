@@ -32,7 +32,7 @@ pub struct User {
     pub active_ips: Option<Vec<IpAddr>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MinUser {
     #[serde(rename = "_id")]
     pub id: ObjectId,
@@ -67,7 +67,7 @@ impl User {
 
     pub async fn get_user_details(
         data: web::Data<Tweetbook>,
-        id: &str,
+        id: String,
     ) -> Result<Vec<Self>, Error> {
         let users = Self::get_collection::<Self>(data)
             .aggregate(
@@ -176,6 +176,35 @@ impl User {
         Self::parse_aggrigate::<Self>(users).await
     }
 
+    pub async fn get_user_by_id(
+        data: web::Data<Tweetbook>,
+        id: String,
+    ) -> Result<Vec<Self>, Error> {
+        let users = Self::get_collection::<Self>(data)
+            .aggregate(
+                vec![
+                    doc! {
+                        "$match": {
+                            "$expr": {
+                                "$eq": ["$_id", {"$toObjectId": id}]
+                            }
+                        }
+                    },
+                    doc! {
+                        "$project": {
+                            "followers": 0,
+                            "following": 0,
+                            "messages": 0
+                        }
+                    },
+                ],
+                None,
+            )
+            .await;
+
+        Self::parse_aggrigate::<Self>(users).await
+    }
+
     pub async fn add_user(
         data: web::Data<Tweetbook>,
         creds: AuthCredentials,
@@ -219,7 +248,6 @@ impl User {
                 None,
             )
             .await;
-        println!("user_updated {:?}", user_updated);
 
         match user_updated {
             Ok(user) => Ok(user.unwrap()),
