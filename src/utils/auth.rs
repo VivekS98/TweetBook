@@ -65,7 +65,18 @@ impl Authorization {
                         let user_res = User::get_user_by_id(data, token_data.claims.sub).await;
 
                         match user_res {
-                            Ok(user) => Ok(user[0].id),
+                            Ok(user) => {
+                                let ip_exists = user[0]
+                                    .active_ips
+                                    .iter()
+                                    .any(|ip| ip.contains(&req.peer_addr().unwrap().ip()));
+
+                                if ip_exists {
+                                    Ok(user[0].id)
+                                } else {
+                                    Err(UserError::Unauthorised)
+                                }
+                            }
                             Err(_) => Err(UserError::Unauthorised),
                         }
                     }
