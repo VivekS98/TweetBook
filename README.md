@@ -12,8 +12,6 @@ API routes
 
 /api/users/:id/follow/:id2 -> POST (follow user with id2), DELETE (unfollow user with id2)
 
-/api/users/:id/notify -> GET (get notifications), PUT (mark notofications)
-
 /api/users/:id/:message_id -> GET (get a tweet), DELETE (delete a tweet)
 
 /api/users/tweet -> POST (post a tweet) DONE

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use actix_web::web;
 use futures::StreamExt;
 use mongodb::{
@@ -96,7 +98,7 @@ impl Message {
         let message = Self::get_collection::<Document>(data.clone())
             .insert_one(
                 doc! {
-                    "user": user_id.clone(),
+                    "user": ObjectId::from_str(user_id.as_str()).unwrap(),
                     "text": text.clone(),
                     "createdAt": DateTime::now(),
                     "updatedAt": DateTime::now()
