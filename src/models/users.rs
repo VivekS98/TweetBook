@@ -194,7 +194,7 @@ impl User {
                         "$project": {
                             "followers": 0,
                             "following": 0,
-                            "messages": 0
+                            "messages": 0,
                         }
                     },
                 ],

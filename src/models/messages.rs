@@ -124,10 +124,7 @@ impl Message {
                         updated_at: DateTime::now(),
                         likes: vec![],
                     }),
-                    Err(error) => {
-                        println!("MSG_error {}", error);
-                        Err(error)
-                    }
+                    Err(error) => Err(error),
                 }
             }
             Err(error) => Err(error),
