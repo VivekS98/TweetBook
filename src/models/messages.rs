@@ -5,6 +5,7 @@ use futures::StreamExt;
 use mongodb::{
     bson::{doc, from_document, oid::ObjectId, DateTime, Document},
     error::Error,
+    options::UpdateModifications,
     Collection, Cursor,
 };
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,13 @@ pub struct Message {
     #[serde(rename = "updatedAt")]
     pub updated_at: DateTime,
     pub likes: Vec<MinUser>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MinMessage {
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
+    pub text: String,
 }
 
 impl Message {
@@ -49,10 +57,17 @@ impl Message {
         }
     }
 
-    pub async fn get_all_messages(data: web::Data<Tweetbook>) -> Result<Vec<Self>, Error> {
-        let messages = Self::get_collection::<Self>(data)
+    pub async fn get_message_by_query<T>(
+        data: web::Data<Tweetbook>,
+        query: Option<Document>,
+    ) -> Result<Vec<T>, Error>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let users = Self::get_collection::<T>(data)
             .aggregate(
                 vec![
+                    query.unwrap_or_else(|| doc! {"$match": {}}),
                     doc! {
                         "$lookup": {
                             "from": "users",
@@ -87,7 +102,7 @@ impl Message {
             )
             .await;
 
-        Self::parse_aggrigate::<Self>(messages).await
+        Self::parse_aggrigate::<T>(users).await
     }
 
     pub async fn insert_message(
@@ -124,6 +139,42 @@ impl Message {
                         updated_at: DateTime::now(),
                         likes: vec![],
                     }),
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn update_message(
+        data: web::Data<Tweetbook>,
+        message_id: String,
+        update: impl Into<UpdateModifications>,
+    ) -> Result<Message, Error> {
+        let message_updated = Self::get_collection::<MinMessage>(data.clone())
+            .find_one_and_update(
+                doc! {"$expr": {
+                    "$eq": ["$_id", {"$toObjectId": message_id.clone()}]
+                }},
+                update,
+                None,
+            )
+            .await;
+
+        match message_updated {
+            Ok(message) => {
+                let msg_res = Message::get_message_by_query::<Message>(
+                    data,
+                    Some(doc! {
+                        "$match": {
+                            "_id": message.unwrap().id
+                        }
+                    }),
+                )
+                .await;
+
+                match msg_res {
+                    Ok(mut msg) => Ok(msg.remove(0)),
                     Err(error) => Err(error),
                 }
             }

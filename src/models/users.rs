@@ -211,7 +211,7 @@ impl User {
         user_id: String,
         update: impl Into<UpdateModifications>,
     ) -> Result<MinUser, Error> {
-        let user_updated = Self::get_collection::<MinUser>(data.clone())
+        let user_updated = Self::get_collection::<MinUser>(data)
             .find_one_and_update(
                 doc! {"$expr": {
                     "$eq": ["$_id", {"$toObjectId": user_id}]
@@ -223,10 +223,7 @@ impl User {
 
         match user_updated {
             Ok(user) => Ok(user.unwrap()),
-            Err(error) => {
-                println!("User_error {}", error);
-                Err(error)
-            }
+            Err(error) => Err(error),
         }
     }
 }

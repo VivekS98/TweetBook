@@ -1,19 +1,29 @@
 use actix_web::{delete, get, post, web, Either, HttpRequest, HttpResponse};
 use mongodb::bson::doc;
+use serde::Deserialize;
 
 use crate::{
-    models::{init::Tweetbook, users::User},
+    models::{
+        init::Tweetbook,
+        users::{MinUser, User},
+    },
     utils::{auth::Authorization, error::UserError},
 };
 
 pub fn user(cfg: &mut web::ServiceConfig) {
-    cfg.service(user_tweets)
+    cfg.service(user_profile)
         .service(follow_user)
-        .service(unfollow_user);
+        .service(unfollow_user)
+        .service(user_search);
+}
+
+#[derive(Deserialize)]
+struct UserSearch {
+    search: String,
 }
 
 #[get("/api/user/profile")]
-async fn user_tweets(
+async fn user_profile(
     req: HttpRequest,
     db: web::Data<Tweetbook>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
@@ -32,7 +42,7 @@ async fn user_tweets(
     }
 }
 
-#[post("/api/users/follow/{user_id}")]
+#[post("/api/user/follow/{user_id}")]
 async fn follow_user(
     req: HttpRequest,
     db: web::Data<Tweetbook>,
@@ -53,7 +63,7 @@ async fn follow_user(
                         let user_follower = User::update_user(
                             db.clone(),
                             id.to_string(),
-                            doc! { "$addToSet": { "following": { "$each": vec![user.id]}  }},
+                            doc! { "$addToSet": { "following": { "$each": vec![user.id]} }},
                         )
                         .await
                         .unwrap();
@@ -78,7 +88,7 @@ async fn follow_user(
     }
 }
 
-#[delete("/api/users/follow/{user_id}")]
+#[delete("/api/user/follow/{user_id}")]
 async fn unfollow_user(
     req: HttpRequest,
     db: web::Data<Tweetbook>,
@@ -99,7 +109,7 @@ async fn unfollow_user(
                         let user_follower = User::update_user(
                             db.clone(),
                             id.to_string(),
-                            doc! { "$pull": { "following": { "$in": vec![user.id]}  }},
+                            doc! { "$pull": { "following": { "$in": vec![user.id]} }},
                         )
                         .await
                         .unwrap();
@@ -117,6 +127,38 @@ async fn unfollow_user(
                         Either::Right(Err(UserError::UserNotExists))
                     }
                 }
+                Err(_) => Either::Right(Err(UserError::UserNotExists)),
+            }
+        }
+        Err(_) => Either::Right(Err(UserError::Unauthorised)),
+    }
+}
+
+#[get("/api/users")]
+async fn user_search(
+    req: HttpRequest,
+    db: web::Data<Tweetbook>,
+    info: web::Query<UserSearch>,
+) -> Either<HttpResponse, Result<&'static str, UserError>> {
+    let id_res = Authorization::verify_request(req).await;
+
+    match id_res {
+        Ok(_) => {
+            let users_response = User::get_user_by_query::<MinUser>(
+                db,
+                doc! {
+                    "$match": {
+                        "username": {
+                            "$regex": info.search.to_string(),
+                            "$options": "i"
+                        }
+                    }
+                },
+            )
+            .await;
+
+            match users_response {
+                Ok(users) => Either::Left(HttpResponse::Ok().json(users)),
                 Err(_) => Either::Right(Err(UserError::UserNotExists)),
             }
         }
