@@ -39,7 +39,13 @@ async fn signup(
     db: web::Data<Tweetbook>,
     body: web::Json<AuthCredentials>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
-    let user_data = User::get_user_by_email(db.clone(), &body.email).await;
+    let user_data = User::get_user_by_query::<User>(
+        db.clone(),
+        doc! {
+            "$match": { "email": &body.email }
+        },
+    )
+    .await;
 
     match user_data {
         Ok(old_users) => {
@@ -80,15 +86,21 @@ async fn signup(
 async fn signin(
     req: HttpRequest,
     db: web::Data<Tweetbook>,
-    json: web::Json<AuthCredentials>,
+    body: web::Json<AuthCredentials>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
-    let user_data = User::get_user_by_email(db.clone(), json.email.as_str()).await;
+    let user_data = User::get_user_by_query::<User>(
+        db.clone(),
+        doc! {
+            "$match": { "email": &body.email }
+        },
+    )
+    .await;
 
     match user_data {
         Ok(mut old_users) => {
             if old_users.len() > 0 {
                 let user = old_users.remove(0);
-                let matched = verify(json.password.as_str(), user.password.unwrap().as_str());
+                let matched = verify(body.password.as_str(), user.password.unwrap().as_str());
 
                 match matched {
                     Ok(password_match) => {

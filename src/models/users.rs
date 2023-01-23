@@ -151,45 +151,17 @@ impl User {
         Self::parse_aggrigate::<Self>(users).await
     }
 
-    pub async fn get_user_by_email(
+    pub async fn get_user_by_query<T>(
         data: web::Data<Tweetbook>,
-        email: &str,
-    ) -> Result<Vec<Self>, Error> {
-        let users = Self::get_collection::<Self>(data)
+        query: Document,
+    ) -> Result<Vec<T>, Error>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let users = Self::get_collection::<T>(data)
             .aggregate(
                 vec![
-                    doc! {
-                        "$match": { "email": email }
-                    },
-                    doc! {
-                        "$project": {
-                            "followers": 0,
-                            "following": 0,
-                            "messages": 0
-                        }
-                    },
-                ],
-                None,
-            )
-            .await;
-
-        Self::parse_aggrigate::<Self>(users).await
-    }
-
-    pub async fn get_user_by_id(
-        data: web::Data<Tweetbook>,
-        id: String,
-    ) -> Result<Vec<Self>, Error> {
-        let users = Self::get_collection::<Self>(data)
-            .aggregate(
-                vec![
-                    doc! {
-                        "$match": {
-                            "$expr": {
-                                "$eq": ["$_id", {"$toObjectId": id}]
-                            }
-                        }
-                    },
+                    query,
                     doc! {
                         "$project": {
                             "followers": 0,
@@ -202,7 +174,7 @@ impl User {
             )
             .await;
 
-        Self::parse_aggrigate::<Self>(users).await
+        Self::parse_aggrigate::<T>(users).await
     }
 
     pub async fn add_user(

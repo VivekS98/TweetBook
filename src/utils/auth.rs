@@ -2,6 +2,7 @@ use actix_web::{http::header, web::Data, HttpRequest};
 use chrono::{Months, Utc};
 use dotenv::dotenv;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -62,7 +63,17 @@ impl Authorization {
                 match decoded {
                     Ok(token_data) => {
                         let data = req.app_data::<Data<Tweetbook>>().unwrap().to_owned();
-                        let user_res = User::get_user_by_id(data, token_data.claims.sub).await;
+                        let user_res = User::get_user_by_query::<User>(
+                            data,
+                            doc! {
+                                "$match": {
+                                    "$expr": {
+                                        "$eq": ["$_id", {"$toObjectId": token_data.claims.sub}]
+                                    }
+                                }
+                            },
+                        )
+                        .await;
 
                         match user_res {
                             Ok(user) => {
