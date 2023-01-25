@@ -17,8 +17,6 @@ pub enum UserError {
     InternalServerError,
     #[display(fmt = "Wrong Email or Password. PLease Try with the valid credentials.")]
     WrongEmailOrPassword,
-    #[display(fmt = "Something's wrong with your request's info! Please check and try again.")]
-    WrongInfo,
 }
 
 impl error::ResponseError for UserError {
@@ -35,7 +33,6 @@ impl error::ResponseError for UserError {
             UserError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             UserError::WrongEmailOrPassword => StatusCode::BAD_REQUEST,
             UserError::Unauthorised => StatusCode::UNAUTHORIZED,
-            UserError::WrongInfo => StatusCode::NOT_ACCEPTABLE,
         }
     }
 }
