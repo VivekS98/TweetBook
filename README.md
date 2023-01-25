@@ -12,7 +12,7 @@ API routes
 
 /api/user/tweet/:tweet_id/like -> POST (like a tweet), DELETE (unlike a tweet) DONE
 
-/api/user/tweet/:tweet_id -> GET (get a tweet), DELETE (delete a tweet)
+/api/user/tweet/:tweet_id -> GET (get a tweet), DELETE (delete a tweet) DONE
 
 /api/user/tweet -> POST (post a tweet) DONE
 
