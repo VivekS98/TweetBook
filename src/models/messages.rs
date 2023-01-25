@@ -181,4 +181,45 @@ impl Message {
             Err(error) => Err(error),
         }
     }
+
+    pub async fn delete_message(
+        data: web::Data<Tweetbook>,
+        tweet_id: String,
+        user_id: String,
+    ) -> Result<(), Error> {
+        let delete_response = Self::get_collection::<MinMessage>(data.clone())
+            .find_one_and_delete(
+                doc! {"$and": [
+                    {
+                        "$expr": {
+                            "$eq": ["$_id", {"$toObjectId": tweet_id.clone()}]
+                        }
+                    },
+                    {
+                        "$expr": {
+                            "$eq": ["$user", {"$toObjectId": user_id.clone()}]
+                        }
+                    },
+                ]},
+                None,
+            )
+            .await;
+
+        match delete_response {
+            Ok(deleted_tweet) => {
+                let updated_user = User::update_user(
+                    data,
+                    user_id,
+                    doc! { "$pull": { "messages": { "$in": vec![deleted_tweet.unwrap().id]} }},
+                )
+                .await;
+
+                match updated_user {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
 }
