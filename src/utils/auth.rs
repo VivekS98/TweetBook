@@ -77,12 +77,7 @@ impl Authorization {
 
                         match user_res {
                             Ok(user) => {
-                                let ip_exists = user[0]
-                                    .active_ips
-                                    .iter()
-                                    .any(|ip| ip.contains(&req.peer_addr().unwrap().ip()));
-
-                                if ip_exists {
+                                if user.len() > 0 {
                                     Ok(user[0].id)
                                 } else {
                                     Err(UserError::Unauthorised)

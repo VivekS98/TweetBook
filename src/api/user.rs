@@ -22,16 +22,18 @@ struct UserSearch {
     search: String,
 }
 
-#[get("/api/user/profile")]
+#[get("/api/user/profile/{user_id}")]
 async fn user_profile(
     req: HttpRequest,
     db: web::Data<Tweetbook>,
+    path: web::Path<String>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
     let id_res = Authorization::verify_request(req).await;
 
     match id_res {
-        Ok(id) => {
-            let users_response = User::get_user_details(db, id.to_string()).await;
+        Ok(_) => {
+            let user_id = path.into_inner();
+            let users_response = User::get_user_details(db, user_id).await;
 
             match users_response {
                 Ok(users) => Either::Left(HttpResponse::Ok().json(users)),
