@@ -1,5 +1,3 @@
-use std::net::IpAddr;
-
 use actix_web::web;
 use bcrypt::hash;
 use futures::StreamExt;
@@ -28,8 +26,6 @@ pub struct User {
     pub bio: Option<String>,
     #[serde(rename = "profileImgUrl")]
     pub profile_img_url: Option<String>,
-    #[serde(rename = "activeIps")]
-    pub active_ips: Option<Vec<IpAddr>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -188,8 +184,7 @@ impl User {
                 doc! {
                     "username": creds.username.unwrap(),
                     "email": creds.email,
-                    "password": hash(creds.password, 10).unwrap(),
-                    "activeIps": vec![creds.ip.unwrap().to_string()]
+                    "password": hash(creds.password, 10).unwrap()
                 },
                 None,
             )
