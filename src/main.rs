@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
                     .finish(),
             )
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", 8088))?
     .run()
     .await
 }
