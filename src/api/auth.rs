@@ -1,8 +1,7 @@
-use actix_web::{post, web, Either, HttpRequest, HttpResponse};
+use actix_web::{post, web, Either, HttpResponse};
 use bcrypt::verify;
 use mongodb::bson::{doc, oid::ObjectId};
 use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
 
 use crate::{
     models::{
@@ -17,11 +16,11 @@ pub struct AuthCredentials {
     pub username: Option<String>,
     pub email: String,
     pub password: String,
-    pub ip: Option<IpAddr>,
 }
 
 #[derive(Serialize)]
 struct AuthResponse {
+    #[serde(rename = "_id")]
     id: ObjectId,
     username: String,
     #[serde(rename = "profileImgUrl")]
@@ -35,7 +34,6 @@ pub fn auth(cfg: &mut web::ServiceConfig) {
 
 #[post("/api/auth/signup")]
 async fn signup(
-    req: HttpRequest,
     db: web::Data<Tweetbook>,
     body: web::Json<AuthCredentials>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
@@ -58,7 +56,6 @@ async fn signup(
                         username: body.username.clone(),
                         email: body.email.clone(),
                         password: body.password.clone(),
-                        ip: Some(req.peer_addr().unwrap().ip()),
                     },
                 )
                 .await;
@@ -84,7 +81,6 @@ async fn signup(
 
 #[post("/api/auth/signin")]
 async fn signin(
-    req: HttpRequest,
     db: web::Data<Tweetbook>,
     body: web::Json<AuthCredentials>,
 ) -> Either<HttpResponse, Result<&'static str, UserError>> {
@@ -105,21 +101,6 @@ async fn signin(
                 match matched {
                     Ok(password_match) => {
                         if password_match == true {
-                            let ip_exists = user
-                                .active_ips
-                                .iter()
-                                .any(|ip| ip.contains(&req.peer_addr().unwrap().ip()));
-
-                            if !ip_exists {
-                                User::update_user(
-                                    db,
-                                    user.id.to_string(),
-                                    doc! { "$push": { "activeIps": req.peer_addr().unwrap().ip().to_string() }},
-                                )
-                                .await
-                                .unwrap();
-                            }
-
                             let claims = MinUser {
                                 id: user.id,
                                 username: user.username,
