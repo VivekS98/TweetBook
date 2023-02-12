@@ -105,6 +105,7 @@ async fn signin(
                                 id: user.id,
                                 username: user.username,
                                 email: user.email,
+                                bio: user.bio,
                                 profile_img_url: user.profile_img_url,
                             };
 

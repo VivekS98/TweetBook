@@ -34,6 +34,7 @@ pub struct MinUser {
     pub id: ObjectId,
     pub email: String,
     pub username: String,
+    pub bio: Option<String>,
     #[serde(rename = "profileImgUrl")]
     pub profile_img_url: Option<String>,
 }
@@ -196,6 +197,7 @@ impl User {
                 email: cloned_creds.email,
                 username: cloned_creds.password,
                 profile_img_url: Some("".to_string()),
+                bio: None,
             }),
             Err(error) => Err(error),
         }
@@ -206,10 +208,10 @@ impl User {
         user_id: String,
         update: impl Into<UpdateModifications>,
     ) -> Result<MinUser, Error> {
-        let user_updated = Self::get_collection::<MinUser>(data)
-            .find_one_and_update(
+        let user_updated = Self::get_collection::<MinUser>(data.clone())
+            .update_one(
                 doc! {"$expr": {
-                    "$eq": ["$_id", {"$toObjectId": user_id}]
+                    "$eq": ["$_id", {"$toObjectId": user_id.clone()}]
                 }},
                 update,
                 None,
@@ -217,7 +219,24 @@ impl User {
             .await;
 
         match user_updated {
-            Ok(user) => Ok(user.unwrap()),
+            Ok(_) => {
+                let user_res = Self::get_user_by_query::<MinUser>(
+                    data,
+                    doc! {
+                        "$match": {
+                            "$expr": {
+                                "$eq": ["$_id", {"$toObjectId": user_id}]
+                            }
+                        }
+                    },
+                )
+                .await;
+
+                match user_res {
+                    Ok(mut user) => Ok(user.remove(0)),
+                    Err(error) => Err(error),
+                }
+            }
             Err(error) => Err(error),
         }
     }

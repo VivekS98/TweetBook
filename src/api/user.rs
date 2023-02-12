@@ -1,4 +1,4 @@
-use actix_web::{delete, get, post, web, Either, HttpRequest, HttpResponse};
+use actix_web::{delete, get, post, put, web, Either, HttpRequest, HttpResponse};
 use mongodb::bson::doc;
 use serde::Deserialize;
 
@@ -12,6 +12,7 @@ use crate::{
 
 pub fn user(cfg: &mut web::ServiceConfig) {
     cfg.service(user_profile)
+        .service(update_profile)
         .service(follow_user)
         .service(unfollow_user)
         .service(user_search);
@@ -20,6 +21,13 @@ pub fn user(cfg: &mut web::ServiceConfig) {
 #[derive(Deserialize)]
 struct UserSearch {
     search: String,
+}
+
+#[derive(Deserialize)]
+struct UserUpdate {
+    bio: String,
+    #[serde(rename = "profileImgUrl")]
+    profile_img_url: String,
 }
 
 #[get("/api/user/profile/{user_id}")]
@@ -34,6 +42,32 @@ async fn user_profile(
         Ok(_) => {
             let user_id = path.into_inner();
             let users_response = User::get_user_details(db, user_id).await;
+
+            match users_response {
+                Ok(users) => Either::Left(HttpResponse::Ok().json(users)),
+                Err(_) => Either::Right(Err(UserError::UserNotExists)),
+            }
+        }
+        Err(_) => Either::Right(Err(UserError::Unauthorised)),
+    }
+}
+
+#[put("/api/user/profile")]
+async fn update_profile(
+    req: HttpRequest,
+    db: web::Data<Tweetbook>,
+    body: web::Json<UserUpdate>,
+) -> Either<HttpResponse, Result<&'static str, UserError>> {
+    let id_res = Authorization::verify_request(req).await;
+
+    match id_res {
+        Ok(id) => {
+            let users_response = User::update_user(
+                db,
+                id.to_string(),
+                doc! {"$set": {"bio": body.bio.to_owned(), "profileImgUrl": body.profile_img_url.to_owned()}},
+            )
+            .await;
 
             match users_response {
                 Ok(users) => Either::Left(HttpResponse::Ok().json(users)),
