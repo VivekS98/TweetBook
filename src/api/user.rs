@@ -89,7 +89,17 @@ async fn follow_user(
     match id_res {
         Ok(id) => {
             let user_id = path.into_inner();
-            let user_res = User::get_user_details(db.clone(), user_id).await;
+            let user_res = User::get_user_by_query::<MinUser>(
+                db.clone(),
+                doc! {
+                    "$match": {
+                        "$expr": {
+                            "$eq": ["$_id", {"$toObjectId": user_id}]
+                        }
+                    }
+                },
+            )
+            .await;
 
             match user_res {
                 Ok(mut users) => {
@@ -105,14 +115,18 @@ async fn follow_user(
                         .unwrap();
 
                         User::update_user(
-                            db,
+                            db.clone(),
                             user.id.to_string(),
                             doc! { "$addToSet": { "followers": { "$each": vec![user_follower.id]}}},
                         )
                         .await
                         .unwrap();
 
-                        Either::Left(HttpResponse::Ok().json(user))
+                        let mut user_updated = User::get_user_details(db, user.id.to_string())
+                            .await
+                            .unwrap();
+
+                        Either::Left(HttpResponse::Ok().json(user_updated.remove(0)))
                     } else {
                         Either::Right(Err(UserError::UserNotExists))
                     }
@@ -135,7 +149,17 @@ async fn unfollow_user(
     match id_res {
         Ok(id) => {
             let user_id = path.into_inner();
-            let user_res = User::get_user_details(db.clone(), user_id).await;
+            let user_res = User::get_user_by_query::<MinUser>(
+                db.clone(),
+                doc! {
+                    "$match": {
+                        "$expr": {
+                            "$eq": ["$_id", {"$toObjectId": user_id}]
+                        }
+                    }
+                },
+            )
+            .await;
 
             match user_res {
                 Ok(mut users) => {
@@ -151,14 +175,18 @@ async fn unfollow_user(
                         .unwrap();
 
                         User::update_user(
-                            db,
+                            db.clone(),
                             user.id.to_string(),
                             doc! { "$pull": { "followers": { "$in": vec![user_follower.id]}}},
                         )
                         .await
                         .unwrap();
 
-                        Either::Left(HttpResponse::Ok().json(user))
+                        let mut user_updated = User::get_user_details(db, user.id.to_string())
+                            .await
+                            .unwrap();
+
+                        Either::Left(HttpResponse::Ok().json(user_updated.remove(0)))
                     } else {
                         Either::Right(Err(UserError::UserNotExists))
                     }
